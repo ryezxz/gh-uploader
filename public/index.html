@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GitHub Uploader</title>
+  <style>
+    :root{--bg:#0b0f1a;--card:#121a2a;--muted:#aab3c5;--text:#eef2ff;--line:#22304f;--accent:#7aa2ff;}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(1200px 600px at 10% 0%, #132042 0%, transparent 60%),var(--bg);color:var(--text)}
+    .wrap{max-width:920px;margin:28px auto;padding:0 16px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid var(--line);border-radius:18px;padding:16px;backdrop-filter: blur(8px)}
+    h1{font-size:20px;margin:0 0 6px}
+    .sub{color:var(--muted);margin:0 0 14px;line-height:1.4}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:720px){.grid{grid-template-columns:1fr}}
+    label{display:block;font-size:13px;color:var(--muted);margin:2px 0 6px}
+    input,button{width:100%;box-sizing:border-box;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--text);padding:12px;font-size:15px}
+    input::placeholder{color:#7f8aa3}
+    .row{margin:10px 0}
+    .btn{background:linear-gradient(90deg,rgba(122,162,255,.25),rgba(122,162,255,.12));border:1px solid rgba(122,162,255,.45);cursor:pointer}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .hint{font-size:13px;color:var(--muted);line-height:1.35;margin-top:6px}
+    pre{white-space:pre-wrap;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:16px;padding:12px;min-height:110px}
+    .pill{display:inline-block;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <div>
+          <h1>Uploader → GitHub</h1>
+          <p class="sub">Pilih banyak file, masukin token, terus auto commit ke repo. Token cuma dipakai sekali pas upload.</p>
+        </div>
+        <span class="pill" id="statusPill">status: ready</span>
+      </div>
+
+      <div class="grid">
+        <div class="row">
+          <label>GitHub Token (fine-grained PAT)</label>
+          <input id="token" type="password" placeholder="github_pat_..." />
+          <div class="hint">⚠️ Saran: token aksesnya cuma 1 repo, dan repo-nya private kalau bot WA.</div>
+        </div>
+
+        <div class="row">
+          <label>Owner (username/org)</label>
+          <input id="owner" placeholder="username" />
+        </div>
+
+        <div class="row">
+          <label>Repo</label>
+          <input id="repo" placeholder="nama-repo" />
+        </div>
+
+        <div class="row">
+          <label>Branch (default: main)</label>
+          <input id="branch" placeholder="main" />
+        </div>
+
+        <div class="row">
+          <label>Masuk ke folder (opsional)</label>
+          <input id="basePath" placeholder="misal: backup/" />
+          <div class="hint">Kalau diisi <b>backup/</b>, semua file bakal masuk folder itu.</div>
+        </div>
+
+        <div class="row">
+          <label>Commit message</label>
+          <input id="msg" placeholder="Upload via web uploader" />
+        </div>
+
+        <div class="row" style="grid-column:1/-1">
+          <label>Pilih file (multi)</label>
+          <input id="files" type="file" multiple />
+          <div class="hint">Auto skip: <code>.env</code>, <code>session*</code>, <code>auth_info*</code> (biar aman).</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="btn">Upload sekarang</button>
+      </div>
+
+      <pre id="out">Ready.</pre>
+      <div class="hint">Tip kalau keputus (H27): coba upload batch kecil-kecil, jangan pas sinyal jelek.</div>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+const btn = $("btn");
+const pill = $("statusPill");
+
+const setPill = (t) => pill.textContent = "status: " + t;
+const pretty = (x) => { try { return JSON.stringify(x, null, 2); } catch { return String(x); } };
+
+btn.addEventListener("click", async () => {
+  out.textContent = "Uploading...";
+  setPill("uploading");
+  btn.disabled = true;
+
+  try {
+    const token = $("token").value.trim();
+    const owner = $("owner").value.trim();
+    const repo  = $("repo").value.trim();
+    const branch = ($("branch").value.trim() || "main");
+    const basePath = $("basePath").value.trim();
+    const message = ($("msg").value.trim() || "Upload via web uploader");
+    const filesEl = $("files");
+
+    if (!token || !owner || !repo) {
+      out.textContent = "Isi dulu: Token, Owner, Repo.";
+      setPill("missing fields");
+      return;
+    }
+    if (!filesEl.files.length) {
+      out.textContent = "Lu belum milih file.";
+      setPill("no files");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("token", token);
+    fd.append("owner", owner);
+    fd.append("repo", repo);
+    fd.append("branch", branch);
+    fd.append("basePath", basePath);
+    fd.append("message", message);
+
+    for (const f of filesEl.files) fd.append("files", f, f.name);
+
+    const res = await fetch("/upload", { method: "POST", body: fd });
+
+    const ct = res.headers.get("content-type") || "";
+    const body = ct.includes("application/json") ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      out.textContent = `HTTP ${res.status}\n` + (typeof body === "string" ? body : pretty(body));
+      setPill("error");
+      return;
+    }
+
+    out.textContent = typeof body === "string" ? body : pretty(body);
+    setPill("done ✅");
+  } catch (e) {
+    out.textContent =
+      "FAILED TO FETCH\n" +
+      "Biasanya: koneksi putus, server lagi restart, atau request ke-abort.\n\n" +
+      "Detail: " + (e?.message || e);
+    setPill("failed to fetch");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
