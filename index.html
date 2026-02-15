@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GitHub Uploader</title>
+  <style>
+    body{font-family:system-ui;max-width:860px;margin:40px auto;padding:0 16px}
+    input,button{font-size:16px}
+    .row{margin:12px 0}
+    .note{color:#666;line-height:1.35}
+    .box{border:1px dashed #aaa;padding:16px;border-radius:14px}
+    button{padding:10px 14px;border-radius:12px;border:1px solid #ccc;background:#fff}
+    pre{white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:12px}
+  </style>
+</head>
+<body>
+  <h2>Upload banyak file → Commit ke GitHub</h2>
+  <div class="box">
+    <div class="row">
+      <label>GitHub Token (fine-grained PAT):</label><br/>
+      <input id="token" type="password" placeholder="github_pat_..." style="width:100%" />
+      <div class="note">Token cuma dipakai sekali pas upload (server nggak nyimpen).</div>
+    </div>
+
+    <div class="row">
+      <label>Owner:</label><br/>
+      <input id="owner" placeholder="username" style="width:100%" />
+    </div>
+
+    <div class="row">
+      <label>Repo:</label><br/>
+      <input id="repo" placeholder="nama-repo" style="width:100%" />
+    </div>
+
+    <div class="row">
+      <label>Branch (default main):</label><br/>
+      <input id="branch" placeholder="main" style="width:100%" />
+    </div>
+
+    <div class="row">
+      <label>Masukin ke folder ini (opsional):</label><br/>
+      <input id="basePath" placeholder="misal: bot/" style="width:100%" />
+      <div class="note">Kalau diisi "bot/", semua file masuk ke folder bot/</div>
+    </div>
+
+    <div class="row">
+      <label>Commit message:</label><br/>
+      <input id="msg" placeholder="Upload via web uploader" style="width:100%" />
+    </div>
+
+    <div class="row">
+      <label>Pilih file (multi):</label><br/>
+      <input id="files" type="file" multiple />
+      <div class="note">Tip: jangan upload <b>.env</b>, <b>session</b>, <b>auth_info</b>.</div>
+    </div>
+
+    <button id="btn">Upload</button>
+
+    <div class="row">
+      <pre id="out">Ready.</pre>
+    </div>
+  </div>
+
+<script>
+const out = document.getElementById("out");
+const btn = document.getElementById("btn");
+
+btn.onclick = async () => {
+  out.textContent = "Uploading...";
+  btn.disabled = true;
+
+  try {
+    const token = document.getElementById("token").value.trim();
+    const owner = document.getElementById("owner").value.trim();
+    const repo = document.getElementById("repo").value.trim();
+    const branch = (document.getElementById("branch").value.trim() || "main");
+    const basePath = document.getElementById("basePath").value.trim();
+    const message = (document.getElementById("msg").value.trim() || "Upload via web uploader");
+    const filesEl = document.getElementById("files");
+
+    if (!token || !owner || !repo) {
+      out.textContent = "Token/Owner/Repo wajib diisi.";
+      btn.disabled = false;
+      return;
+    }
+    if (!filesEl.files.length) {
+      out.textContent = "Pilih minimal 1 file.";
+      btn.disabled = false;
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("token", token);
+    fd.append("owner", owner);
+    fd.append("repo", repo);
+    fd.append("branch", branch);
+    fd.append("basePath", basePath);
+    fd.append("message", message);
+
+    for (const f of filesEl.files) fd.append("files", f, f.name);
+
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const text = await res.text();
+    out.textContent = text;
+  } catch (e) {
+    out.textContent = "Error: " + (e?.message || e);
+  } finally {
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
